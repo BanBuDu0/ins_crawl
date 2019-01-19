@@ -5,7 +5,6 @@ import json
 from urllib import parse
 import db_control
 from module import URLData
-import multiPageCrawl
 
 
 def getHTML(url):
@@ -25,38 +24,6 @@ def getHTML(url):
     return r
 
 
-def myParse(edge_owner, param):
-    #edge_owner = data_json['data']['user']['edge_owner_to_timeline_media']
-    page_info = edge_owner['page_info']
-    has_next_page = page_info['has_next_page']
-    end_cursor = page_info['end_cursor']
-    edges = edge_owner['edges']
-
-    for i in range(len(edges)):
-        node = edges[i]['node']
-        one_data = URLData()
-        one_data.shortcode = node['shortcode']
-        one_data.url = node['display_url']
-        is_single_pic = node['media_preview']
-        is_video = node['is_video']
-        db_control.insert(one_data)
-            
-        if not is_single_pic:
-            datas = multiPageCrawl.getDeepPic(one_data)
-            if datas:
-                for i in datas:
-                    db_control.insert(i)
-
-    if has_next_page:
-        param['after'] = page_info['end_cursor']
-        text = json.dumps(param)
-        url = "https://www.instagram.com/graphql/query/?query_hash=e6a78c2942f1370ea50e04c9a45ebc44&variables="+parse.quote(text)
-        r = getHTML(url)
-        temp_json = json.loads(r)
-        temp_owner = temp_json['data']['user']['edge_owner_to_timeline_media']
-        myParse(temp_owner, param)
-
-
 def getStartJson(url):
     r = getHTML(url)
     p = re.compile(r'<script type="text/javascript">window._sharedData =(.*?);</script>')
@@ -66,6 +33,60 @@ def getStartJson(url):
     return data_json
 
 
+def multiPageCrawl(data):
+    shortcode = data.shortcode
+    url = "https://www.instagram.com/p/%s/" % shortcode
+    data_json = getStartJson(url)
+    try:
+        edges = data_json['entry_data']['PostPage'][0]['graphql']['shortcode_media']['edge_sidecar_to_children']['edges']
+        # print(len(edges))
+        for i in range(1, len(edges)): 
+            node = edges[i]['node']
+            urldata = URLData()
+            urldata.shortcode = node['shortcode']
+            urldata.is_video = node['is_video']
+            if node['is_video']:
+                urldata.url = node['video_url']
+            else:
+                urldata.url = node['display_url']
+            yield urldata
+    except:
+        pass
+
+
+def myParse(edge_owner, param, tableName):
+    page_info = edge_owner['page_info']
+    has_next_page = page_info['has_next_page']
+    end_cursor = page_info['end_cursor']
+    edges = edge_owner['edges']
+
+    for i in range(len(edges)):
+        node = edges[i]['node']
+        one_data = URLData()
+        one_data.shortcode = node['shortcode']
+        one_data.is_video = node['is_video']
+        if node['is_video']:
+            one_data.url = node['video_url']
+        else:
+            one_data.url = node['display_url']
+        db_control.insert(one_data, tableName)
+
+        is_single_pic = node['media_preview']
+        if not is_single_pic:
+            datas = multiPageCrawl(one_data)
+            if datas:
+                for i in datas:
+                    db_control.insert(i, tableName)
+
+    if has_next_page:
+        param['after'] = end_cursor
+        text = json.dumps(param)
+        url = "https://www.instagram.com/graphql/query/?query_hash=e6a78c2942f1370ea50e04c9a45ebc44&variables="+parse.quote(text)
+        r = getHTML(url)
+        temp_json = json.loads(r)
+        temp_owner = temp_json['data']['user']['edge_owner_to_timeline_media']
+        myParse(temp_owner, param, tableName)
+
 
 if __name__ == '__main__':
     start_url = "https://www.instagram.com/ysubini/"
@@ -74,6 +95,8 @@ if __name__ == '__main__':
     
     USERID = user['id']
     USERNAME = user['username']
+    tableName = USERNAME + USERID
+    # con = db_control.connect(tableName)
 
     edge_owner = user['edge_owner_to_timeline_media']
     param = {
@@ -81,4 +104,4 @@ if __name__ == '__main__':
         'first': 12,
         'after': None
     }
-    myParse(edge_owner, param)
+    myParse(edge_owner, param, tableName)

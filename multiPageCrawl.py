@@ -13,9 +13,12 @@ def getDeepPic(data):
         for i in range(1, len(edges)): 
             node = edges[i]['node']
             urldata = URLData()
-            urldata.url = node['display_url']
             urldata.shortcode = node['shortcode']
             urldata.is_video = node['is_video']
+            if node['is_video']:
+                urldata.url = node['video_url']
+            else:
+                urldata.url = node['display_url']
             yield urldata
     except Exception as e:
         pass
