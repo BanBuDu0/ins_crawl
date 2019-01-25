@@ -24,7 +24,6 @@ def findall(tableName):
         yield i
 
 
-
 def showall(tableName):
     datas = findall(tableName)
     count = 0
