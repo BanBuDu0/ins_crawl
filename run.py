@@ -50,7 +50,6 @@ def multi_page_crawl(shortcode, tableName):
     except:
         pass
 
-
 def myParse(edge_owner, param, tableName):
     page_info = edge_owner['page_info']
     has_next_page = page_info['has_next_page']
@@ -107,4 +106,4 @@ if __name__ == "__main__":
     start_url = "https://www.instagram.com/ysubini/"
     user_info, user_data = get_user(start_url)
     get_user_data(user_info, user_data)
-    # download_pic(user)
+    download_pic(user_info)
